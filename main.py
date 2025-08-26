@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 DATABASE_URL = "sqlite:///./app.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
 
 class Project(Base):
     """Database model for projects"""
@@ -42,9 +43,53 @@ class Student(Base):
     # Relationship back to project
     project = relationship("Project", back_populates="students")
 
+class ProjectBase(BaseModel):
+    project_name: str
+    project_description: str
+
+class ProjectSchema(ProjectBase):
+    id: int
+    class Config:
+        orm_mode = True
+
+
+# Student schemas
+class StudentBase(BaseModel):
+    name: str
+    email: str
+    linkedin_profile: Optional[str] = None
+    about_you: Optional[str] = None
+    specialisation: Optional[str] = None
+    cgpa: Optional[float] = None
+    favourite_language: Optional[str] = None
+    favourite_framework: Optional[str] = None
+    is_leader: bool = False
+    project_id: Optional[int] = None
+
+class StudentSchema(StudentBase):
+    id: int
+    class Config:
+        orm_mode = True
 
 app = FastAPI()
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# http://localhost:8000/
 @app.get("/")
 def root():
     return "Hello World"
+
+# http://localhost:8000/projects
+@app.post("/projects/", response_model=ProjectSchema, status_code=201)
+def create_project(project: ProjectBase, db: Session = Depends(get_db)):
+    new_project = Project(**project.model_dump())
+    db.add(new_project)
+    db.commit()
+    db.refresh(new_project)
+    return new_project
